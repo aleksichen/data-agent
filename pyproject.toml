@@ -1,0 +1,25 @@
+[project]
+name = "data-agent"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "asyncio>=3.4.3",
+    "fastapi>=0.115.12",
+    "langchain>=0.3.21",
+    "langgraph>=0.3.21",
+    "litellm>=1.65.0",
+    "sse-starlette>=2.2.1",
+    "uvicorn>=0.34.0",
+    "json-repair>=0.9.0",
+    "pytest>=8.3.5",
+    "mcp>=1.6.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.12.0",
+]
