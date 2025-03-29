@@ -15,7 +15,7 @@ def research_node(state: State) -> Command[Literal["supervisor"]]:
         update={
             "messages": [
                 HumanMessage(
-                    content="研究任务正在实施",
+                    content="已经搜集了React Todo List应用的相关资料，包括关键组件、状态管理和最佳实践。这些信息将用于创建开发计划。",
                     name="researcher",
                 )
             ]
