@@ -31,10 +31,15 @@ def get_llm_by_type(llm_type: str, mock_llm: Optional[Any] = None):
     # 从环境变量获取API密钥
     api_key = os.environ.get("DEEPSEEK_API_KEY")
     
-    # 如果没有API密钥，返回模拟LLM
+    # 如果没有API密钥，使用模拟API
     if not api_key:
-        print("警告: 未设置DEEPSEEK_API_KEY环境变量，使用模拟LLM")
-        return _get_mock_llm()
+        print("DEBUG: 未设置DEEPSEEK_API_KEY环境变量，使用模拟 LLM")
+        config = {
+            "api_provider": "mock",
+            "model_name": "mock-llm"
+        }
+        handler = create_api_handler(config)
+        return LangChainCompatibleLLM(handler)
     
     # 根据llm_type获取对应的模型名称
     model_name = LLM_TYPE_MODEL_MAP.get(llm_type, "deepseek-chat")

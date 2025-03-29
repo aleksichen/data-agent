@@ -8,8 +8,10 @@ from typing import Dict, List, Any, Optional
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 from sse_starlette import EventSourceResponse
+from langchain_core.messages import HumanMessage
 
-from src.graph import create_agent_workflow
+from src.graph.builder import build_graph
+from src.graph.types import State
 from src.api.app import MessageType, Message
 
 logger = logging.getLogger(__name__)
@@ -22,7 +24,7 @@ class LangGraphRequest(BaseModel):
 
 @router.post("/langgraph/chat")
 async def langgraph_chat(request: Request, chat_request: LangGraphRequest):
-    """LangGraph-based chat API."""
+    """LangGraph-based chat API with streaming."""
     
     async def event_generator():
         session_id = str(uuid.uuid4())
@@ -40,48 +42,88 @@ async def langgraph_chat(request: Request, chat_request: LangGraphRequest):
         query = last_message.content
         
         # Create the workflow
-        workflow = create_agent_workflow()
+        graph = build_graph()
         
-        # 1. Send thinking process
+        # Initialize state
+        state = State(
+            messages=[HumanMessage(content=query)],
+            next="",
+            full_plan="",
+            TEAM_MEMBERS=["coordinator", "planner", "supervisor", "researcher", "coder", "browser", "reporter"]
+        )
+        
+        # Send initial state
         yield {
             "event": MessageType.THINKING, 
             "data": json.dumps({
                 "session_id": session_id,
-                "content": "Analyzing your question with LangGraph workflow...",
+                "content": "开始处理您的请求...",
                 "timestamp": time.time()
             })
         }
         
-        # 2. Run the workflow
+        # Track message index to detect new messages
+        prev_msg_count = 1  # Start with one human message
+        current_node = "coordinator"
+        
         try:
-            # Initialize state with the query
-            state = {"query": query, "thoughts": [], "response": None}
+            # Stream the workflow execution
+            async for chunk in graph.astream(state):
+                # Process new messages
+                if "messages" in chunk and len(chunk["messages"]) > prev_msg_count:
+                    # Get only new messages
+                    new_messages = chunk["messages"][prev_msg_count:]
+                    for msg in new_messages:
+                        # Format the message for streaming
+                        if hasattr(msg, 'name') and msg.name:
+                            role = msg.name
+                        else:
+                            role = msg.__class__.__name__.replace('Message', '')
+                        
+                        # Send the message
+                        yield {
+                            "event": MessageType.THINKING,
+                            "data": json.dumps({
+                                "session_id": session_id,
+                                "content": f"[{role}]: {msg.content}",
+                                "timestamp": time.time()
+                            })
+                        }
+                        await asyncio.sleep(0.3)  # Small delay for better visualization
+                    
+                    prev_msg_count = len(chunk["messages"])
+                
+                # Track node transitions
+                if "next" in chunk and chunk["next"] and chunk["next"] != current_node:
+                    current_node = chunk["next"]
+                    yield {
+                        "event": "node_update",
+                        "data": json.dumps({
+                            "session_id": session_id,
+                            "node": current_node,
+                            "timestamp": time.time()
+                        })
+                    }
             
-            # Execute the workflow
-            result = workflow.invoke(state)
+            # Send final response - last AI message
+            last_ai_message = None
+            for msg in reversed(chunk["messages"]):
+                if hasattr(msg, 'name') and msg.name:
+                    last_ai_message = msg.content
+                    last_role = msg.name
+                    break
             
-            # Get thoughts for streaming
-            thoughts = result.get("thoughts", [])
-            for thought in thoughts:
-                await asyncio.sleep(0.5)  # Simulate thinking delay
-                yield {
-                    "event": MessageType.THINKING,
-                    "data": json.dumps({
-                        "session_id": session_id,
-                        "content": thought,
-                        "timestamp": time.time()
-                    })
-                }
+            if not last_ai_message:
+                last_ai_message = "处理完成，但没有生成响应。"
+                last_role = "system"
             
-            # 3. Final answer
-            final_response = result.get("response", "No response generated")
-            
-            # Stream the final answer
+            # Final answer
             yield {
                 "event": MessageType.FINAL_ANSWER,
                 "data": json.dumps({
                     "session_id": session_id,
-                    "content": final_response,
+                    "content": last_ai_message,
+                    "role": last_role,
                     "timestamp": time.time(),
                     "finished": True
                 })

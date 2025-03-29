@@ -14,6 +14,7 @@ from src.graph.nodes import (
 
 def build_graph():
     """构建并返回智能体工作流图。"""
+    print("Building graph...")
     builder = StateGraph(State)
     
     # 添加边和节点

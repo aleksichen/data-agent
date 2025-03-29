@@ -51,11 +51,13 @@ def coordinator_node(state: State) -> Command[Literal["planner", "__end__"]]:
         HumanMessage(content=user_message)
     ]
     
+    print(f"DEBUG: 协调员调用LLM前的消息: {prompt_message}")
+    
     # 调用LLM
     response = llm.invoke(prompt_message)
     response_content = response.content
     
-    logger.info(f"协调员响应: {response_content}")
+    print(f"DEBUG: 协调员响应: {response_content}")
     
     # 判断是简单任务还是复杂任务
     if "handoff_to_planner()" in response_content:
