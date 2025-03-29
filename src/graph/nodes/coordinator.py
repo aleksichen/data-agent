@@ -50,9 +50,7 @@ def coordinator_node(state: State) -> Command[Literal["planner", "__end__"]]:
         SystemMessage(content=formatted_prompt),
         HumanMessage(content=user_message)
     ]
-    
-    print(f"DEBUG: 协调员调用LLM前的消息: {prompt_message}")
-    
+        
     # 调用LLM
     response = llm.invoke(prompt_message)
     response_content = response.content
