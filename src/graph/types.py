@@ -23,5 +23,3 @@ class State(MessagesState):
     # 运行时变量
     next: str
     full_plan: str
-    deep_thinking_mode: bool
-    search_before_planning: bool
