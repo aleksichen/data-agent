@@ -1,0 +1,19 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql" // 你可以根据实际情况更改为 mysql, sqlite 等
+  url      = env("DATABASE_URL")
+}
+
+// 示例表结构 - 你需要根据实际数据库调整
+model sale_data_id {
+  id       Int     @id @default(autoincrement())
+  month    String
+  profit   Float
+  category String
+}

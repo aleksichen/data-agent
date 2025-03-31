@@ -15,6 +15,18 @@ dependencies = [
     "json-repair>=0.9.0",
     "pytest>=8.3.5",
     "mcp>=1.6.0",
+    "dbt-doris>=0.3.4",
+    "agno>=1.2.6",
+    "duckduckgo-search>=7.5.5",
+    "rich>=13.9.4",
+    "akshare>=1.16.65",
+    "pymysql>=1.1.1",
+    "sqlalchemy>=2.0.40",
+    "psycopg[binary]>=3.2.6",
+    "pgvector>=0.4.0",
+    "pypdf>=5.4.0",
+    "psycopg2-binary>=2.9.10",
+    "kagglehub>=0.3.10",
 ]
 
 [project.optional-dependencies]

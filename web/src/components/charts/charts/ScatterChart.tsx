@@ -230,19 +230,17 @@ const ScatterChart: React.FC<ScatterChartProps> = ({
 };
 
 export default ScatterChart;
-const params = {
-  type: "bar",
-  dataSource: {
-    table: "sale_data_id",
-    field: ["month", "profit", "category"],
-  },
-  dimensions: [{ field: "month", name: "月份" }],
-  measures: [{ field: "profit", name: "利润" }],
-  series: { field: "category", name: "类别" },
-  config: {
-    title: "月度利润对比",
-    height: 350,
-    colors: ["#59a14f", "#e15759"],
-    groupMode: "grouped",
-  },
-};
+// const params = {
+//   type: "bar",
+//   dataSource: {
+//     table: "sale_data_id",
+//     field: ["month", "profit", "category"],
+//   },
+//   dimensions: [{ field: "month", name: "月份" }],
+//   measures: [{ field: "profit", name: "利润" }],
+//   series: { field: "category", name: "类别" },
+//   config: {
+//     title: "月度利润对比",
+
+//   },
+// };

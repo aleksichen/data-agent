@@ -10,6 +10,7 @@
     "editor.formatOnSave": true,
     "python.formatting.provider": "black",
     "python.analysis.extraPaths": [
-        "${workspaceFolder}"
+        "${workspaceFolder}",
+        "./src/api"
     ]
 }
