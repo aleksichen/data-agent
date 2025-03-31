@@ -141,6 +141,7 @@ export interface ReasoningMessage {
 export interface PlaygroundChatMessage {
   role: 'user' | 'agent' | 'system' | 'tool'
   content: string
+  content_type: string
   streamingError?: boolean
   created_at: number
   tool_calls?: ToolCall[]

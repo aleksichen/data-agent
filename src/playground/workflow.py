@@ -9,4 +9,4 @@ bi_workflow = BIWorkflow(
 app = Playground(workflows=[bi_workflow]).get_app()
 
 if __name__ == "__main__":
-  serve_playground_app("src.agents.playground:app", reload=True)
+  serve_playground_app("src.playground:workflow.app", reload=True)

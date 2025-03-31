@@ -1,6 +1,7 @@
 from typing import Any, Dict, List, Optional, Union
 import pandas as pd
 import os
+import time
 import csv
 
 try:
@@ -16,9 +17,10 @@ from agno.utils.log import log_debug, log_info
 
 
 class DorisTools(Toolkit):
-    """A simple toolkit to connect to Apache Doris database using PyMySQL.
+    """A simple toolkit to connect to Apache Doris database with basic Data Dictionary support.
     
-    This tool allows AI agents to query, analyze, and write data to Doris.
+    This tool allows AI agents to query, analyze, and write data to Doris,
+    while maintaining a data dictionary to track basic descriptions of tables and columns.
     """
 
     def __init__(
@@ -55,11 +57,16 @@ class DorisTools(Toolkit):
         self.register(self.describe_table)
         self.register(self.analyze_data)
         self.register(self.export_to_csv)
+        self.register(self.search_dictionary)
         
         if not read_only:
             self.register(self.insert_data)
             self.register(self.update_data)
             self.register(self.execute_sql)
+            self.register(self.save)
+        
+        # Ensure data dictionary table exists
+        self._ensure_data_dictionary_exists()
 
     @property
     def connection(self) -> pymysql.connections.Connection:
@@ -90,6 +97,34 @@ class DorisTools(Toolkit):
         except:
             self._connection = None
             self.connection  # This will recreate the connection
+    
+    def _ensure_data_dictionary_exists(self):
+        """Ensure data dictionary table exists."""
+        if self.read_only:
+            log_info("In read-only mode. Cannot create data dictionary table if it doesn't exist.")
+            return
+        
+        try:
+            self._ensure_connection()
+            cursor = self.connection.cursor()
+            
+            # Create a simple data dictionary table
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS `data_dictionary` (
+                `table_name` VARCHAR(255) NOT NULL COMMENT '表名',
+                `column_name` VARCHAR(255) NOT NULL COMMENT '列名（表名为表记录，列名为空为表描述）',
+                `description` TEXT COMMENT '描述信息',
+                `updated_at` DATETIME COMMENT '更新时间'
+            ) ENGINE=OLAP
+            DUPLICATE KEY(`table_name`, `column_name`)
+            DISTRIBUTED BY HASH(`table_name`) BUCKETS 1
+            PROPERTIES('replication_num' = '1');
+            """)
+            
+            cursor.close()
+            log_info("Data dictionary initialized")
+        except Exception as e:
+            log_debug(f"Error ensuring data dictionary exists: {str(e)}")
 
     def query(self, sql: str, as_pandas: bool = True) -> Union[str, pd.DataFrame]:
         """Execute a query and return the results.
@@ -141,29 +176,139 @@ class DorisTools(Toolkit):
             return error_msg
 
     def show_tables(self) -> str:
-        """Show all tables in the current database.
+        """Show all tables with their descriptions from the data dictionary.
         
         Returns:
-            List of tables
+            List of tables with descriptions
         """
-        result = self.query("SHOW TABLES", as_pandas=True)
-        if isinstance(result, pd.DataFrame):
-            return result.to_string(index=False)
-        return result
+        try:
+            # First check if the data dictionary table exists
+            self._ensure_connection()
+            cursor = self.connection.cursor()
+            
+            try:
+                cursor.execute("SELECT 1 FROM data_dictionary LIMIT 1")
+                dict_exists = True
+            except:
+                dict_exists = False
+            
+            # If data dictionary exists and has data, use it
+            if dict_exists:
+                # Query to get tables and their descriptions
+                query = """
+                SELECT 
+                    d1.table_name as '表名', 
+                    d1.description as '表描述'
+                FROM data_dictionary d1
+                WHERE d1.column_name = ''
+                ORDER BY d1.table_name
+                """
+                result = self.query(query, as_pandas=True)
+                
+                # If we got results from the data dictionary
+                if isinstance(result, pd.DataFrame) and not result.empty:
+                    return result.to_string(index=False)
+            
+            # Fallback to standard SHOW TABLES if dictionary is empty or doesn't exist
+            log_info("Data dictionary empty or not found. Using standard SHOW TABLES.")
+            result = self.query("SHOW TABLES", as_pandas=True)
+            if isinstance(result, pd.DataFrame):
+                return result.to_string(index=False)
+            return result
+            
+        except Exception as e:
+            error_msg = f"Error showing tables: {str(e)}"
+            log_debug(error_msg)
+            return error_msg
 
     def describe_table(self, table: str) -> str:
-        """Describe the structure of a table.
+        """Describe a table using data dictionary information if available.
         
         Args:
             table: Name of the table to describe
             
         Returns:
-            Table structure information
+            Enhanced table description with column descriptions from data dictionary
         """
-        result = self.query(f"DESC `{table}`", as_pandas=True)
-        if isinstance(result, pd.DataFrame):
-            return result.to_string(index=False)
-        return result
+        try:
+            # First get the standard table structure
+            std_desc = self.query(f"DESC `{table}`", as_pandas=True)
+            
+            # Try to get table and column descriptions from data dictionary
+            try:
+                # Get table description
+                table_query = f"""
+                SELECT description 
+                FROM data_dictionary 
+                WHERE table_name = '{table}' AND column_name = ''
+                """
+                table_desc_result = self.query(table_query, as_pandas=True)
+                table_description = table_desc_result.iloc[0]['description'] if isinstance(table_desc_result, pd.DataFrame) and not table_desc_result.empty else None
+                
+                # Get column descriptions
+                columns_query = f"""
+                SELECT column_name, description 
+                FROM data_dictionary 
+                WHERE table_name = '{table}' AND column_name != ''
+                """
+                columns_desc_result = self.query(columns_query, as_pandas=True)
+                
+                # Create a dictionary of column descriptions
+                column_descriptions = {}
+                if isinstance(columns_desc_result, pd.DataFrame) and not columns_desc_result.empty:
+                    for _, row in columns_desc_result.iterrows():
+                        column_descriptions[row['column_name']] = row['description']
+                
+                # If we found data in the dictionary, use it to enhance output
+                if table_description or column_descriptions:
+                    # Start building enhanced output
+                    output = []
+                    
+                    # Add table information
+                    output.append(f"=== 表信息: {table} ===")
+                    if table_description:
+                        output.append(f"描述: {table_description}")
+                    
+                    # Add column information
+                    output.append("\n=== 字段信息 ===")
+                    
+                    if isinstance(std_desc, pd.DataFrame) and not std_desc.empty:
+                        # Create a new DataFrame with combined info
+                        data = []
+                        for _, row in std_desc.iterrows():
+                            field_name = row['Field']
+                            data_type = row['Type']
+                            is_nullable = row['Null']
+                            is_key = row['Key']
+                            
+                            # Get description from dictionary
+                            description = column_descriptions.get(field_name, '')
+                            
+                            data.append({
+                                '字段名': field_name,
+                                '类型': data_type,
+                                '可为空': is_nullable,
+                                '主键': is_key,
+                                '描述': description
+                            })
+                        
+                        combined_df = pd.DataFrame(data)
+                        output.append(combined_df.to_string(index=False))
+                    
+                    return "\n".join(output)
+            except Exception as e:
+                # If any error in data dictionary lookup, fall back to standard describe
+                log_debug(f"Error getting data dictionary info: {str(e)}")
+            
+            # Fallback to standard DESC if dictionary lookup fails
+            if isinstance(std_desc, pd.DataFrame):
+                return std_desc.to_string(index=False)
+            return str(std_desc)
+            
+        except Exception as e:
+            error_msg = f"Error describing table: {str(e)}"
+            log_debug(error_msg)
+            return error_msg
 
     def analyze_data(self, sql: str) -> str:
         """Analyze data using a SQL query and provide statistics.
@@ -188,7 +333,7 @@ class DorisTools(Toolkit):
             
             # Analyze numeric columns
             numeric_cols = result.select_dtypes(include=['number']).columns
-            if not numeric_cols.empty:
+            if len(numeric_cols) > 0:
                 stats.append("\nNumeric Column Statistics:")
                 for col in numeric_cols:
                     stats.append(f"\n{col}:")
@@ -199,7 +344,7 @@ class DorisTools(Toolkit):
             
             # Analyze non-numeric columns
             non_numeric_cols = result.select_dtypes(exclude=['number']).columns
-            if not non_numeric_cols.empty:
+            if len(non_numeric_cols) > 0:
                 stats.append("\nNon-numeric Column Statistics:")
                 for col in non_numeric_cols:
                     stats.append(f"\n{col}:")
@@ -240,6 +385,41 @@ class DorisTools(Toolkit):
             return f"Successfully exported {len(result)} rows to {file_path}"
         except Exception as e:
             error_msg = f"Export error: {str(e)}"
+            log_debug(error_msg)
+            return error_msg
+
+    def search_dictionary(self, search_term: str) -> str:
+        """Search the data dictionary for tables or columns matching a term.
+        
+        Args:
+            search_term: Term to search for
+            
+        Returns:
+            Search results formatted as a string
+        """
+        try:
+            search_query = f"""
+            SELECT 
+                table_name as '表名',
+                CASE WHEN column_name = '' THEN '(表)' ELSE column_name END as '字段名',
+                description as '描述'
+            FROM data_dictionary
+            WHERE 
+                table_name LIKE '%{search_term}%' OR
+                column_name LIKE '%{search_term}%' OR
+                description LIKE '%{search_term}%'
+            ORDER BY table_name, column_name
+            """
+            
+            result = self.query(search_query, as_pandas=True)
+            
+            if isinstance(result, pd.DataFrame) and not result.empty:
+                return result.to_string(index=False)
+            else:
+                return f"No matches found for '{search_term}'"
+            
+        except Exception as e:
+            error_msg = f"Search error: {str(e)}"
             log_debug(error_msg)
             return error_msg
 
@@ -343,26 +523,31 @@ class DorisTools(Toolkit):
         
         return self.query(sql, as_pandas=False)
 
-    def save(self, table: str, df: pd.DataFrame, if_exists: str = 'append', 
-             create_table_options: Optional[str] = None) -> str:
-        """Save a pandas DataFrame to a Doris table.
+    def save(self, table: str, df: pd.DataFrame, 
+            if_exists: str = 'append', 
+            key_columns: Optional[List[str]] = None,
+            table_description: Optional[str] = None,
+            column_descriptions: Optional[Dict[str, str]] = None) -> str:
+        """Save a pandas DataFrame to a Doris table and update the data dictionary.
         
         Args:
             table: Name of the table to save data to
             df: pandas DataFrame to save
             if_exists: What to do if the table exists ('fail', 'append', 'replace')
-            create_table_options: Additional Doris-specific CREATE TABLE options
-                                  (e.g., "ENGINE=OLAP DUPLICATE KEY(`id`) DISTRIBUTED BY HASH(`id`) BUCKETS 10")
+            key_columns: List of column names to use as the Doris table's key. 
+                        If not provided, the first column will be used.
+            table_description: Description of the table's purpose
+            column_descriptions: Dictionary of column descriptions (column_name: description)
         
         Returns:
-            Schema information of the saved data
+            Schema information of the saved data and data dictionary update status
         """
         if self.read_only:
             return "Cannot save data in read-only mode."
         
         if df.empty:
             return "Cannot save empty DataFrame."
-            
+                
         self._ensure_connection()
         
         try:
@@ -377,11 +562,11 @@ class DorisTools(Toolkit):
                 if if_exists.lower() == 'fail':
                     cursor.close()
                     return f"Table '{table}' already exists and if_exists is set to 'fail'."
-                    
+                        
                 elif if_exists.lower() == 'replace':
                     cursor.execute(f"DROP TABLE `{table}`")
                     table_exists = False
-                    
+                        
                 elif if_exists.lower() != 'append':
                     cursor.close()
                     return f"Invalid value for if_exists: {if_exists}. Must be one of: 'fail', 'append', 'replace'."
@@ -397,15 +582,26 @@ class DorisTools(Toolkit):
                 
                 columns_str = ", ".join(column_defs)
                 
-                # Add default options if not provided
-                if not create_table_options:
-                    # Choose first column as key by default
-                    key_col = df.columns[0]
-                    create_table_options = f"ENGINE=OLAP DUPLICATE KEY(`{key_col}`) DISTRIBUTED BY HASH(`{key_col}`) BUCKETS 10 PROPERTIES('replication_num' = '1')"
-
-                create_stmt = f"CREATE TABLE `{table}` ({columns_str}) {create_table_options}"
+                # Determine key columns
+                if not key_columns:
+                    # Default to first column if not specified
+                    key_columns = [df.columns[0]]
+                
+                # Validate that all key columns exist in the dataframe
+                for col in key_columns:
+                    if col not in df.columns:
+                        cursor.close()
+                        return f"Error: Key column '{col}' does not exist in the DataFrame."
+                
+                # Format key columns and build table options
+                key_cols_str = ", ".join([f"`{col}`" for col in key_columns])
+                distribution_col = key_columns[0]  # Use first key column for distribution
+                
+                table_options = f"ENGINE=OLAP DUPLICATE KEY({key_cols_str}) DISTRIBUTED BY HASH(`{distribution_col}`) BUCKETS 5 PROPERTIES('replication_num' = '1')"
+                
+                create_stmt = f"CREATE TABLE `{table}` ({columns_str}) {table_options}"
                 cursor.execute(create_stmt)
-                log_info(f"Created table {table}")
+                log_info(f"Created table {table} with key columns: {key_columns}")
             
             # Insert data in batches
             batch_size = 1000
@@ -436,24 +632,103 @@ class DorisTools(Toolkit):
             
             self.connection.commit()
             
+            # Update data dictionary
+            self._update_data_dictionary(
+                table=table,
+                df=df,
+                table_description=table_description,
+                column_descriptions=column_descriptions
+            )
+            
             # Get schema information
             cursor.execute(f"DESC `{table}`")
             schema_info = cursor.fetchall()
             
-            schema_output = f"Successfully saved {inserted_rows} rows to table '{table}'\n\nTable Schema:"
+            # Start building output message
+            schema_output = [f"Successfully saved {inserted_rows} rows to table '{table}'"]
+            
+            # Add data dictionary information if it was provided
+            if table_description or column_descriptions:
+                schema_output.append("\nData Dictionary updated with descriptions")
+            
+            schema_output.append("\nTable Schema:")
             
             # Format schema info
             if schema_info:
                 df_schema = pd.DataFrame(schema_info)
-                schema_output += "\n" + df_schema.to_string(index=False)
+                schema_output.append(df_schema.to_string(index=False))
             
             cursor.close()
-            return schema_output
-            
+            return "\n".join(schema_output)
+                
         except Exception as e:
             error_msg = f"Error saving DataFrame: {str(e)}"
             log_debug(error_msg)
             return error_msg
+
+    def _update_data_dictionary(self, table: str, df: pd.DataFrame, 
+                              table_description: Optional[str] = None,
+                              column_descriptions: Optional[Dict[str, str]] = None):
+        """Update the data dictionary with table and column descriptions.
+        
+        Args:
+            table: Table name
+            df: DataFrame with the data
+            table_description: Table description
+            column_descriptions: Column descriptions
+        """
+        try:
+            self._ensure_connection()
+            cursor = self.connection.cursor()
+            now = time.strftime('%Y-%m-%d %H:%M:%S')
+            
+            # Update table description if provided
+            if table_description:
+                # Check if table description exists
+                cursor.execute(f"SELECT 1 FROM data_dictionary WHERE table_name = '{table}' AND column_name = '' LIMIT 1")
+                exists = bool(cursor.fetchone())
+                
+                if exists:
+                    # Update existing record
+                    cursor.execute(f"""
+                    UPDATE data_dictionary 
+                    SET description = %s, updated_at = '{now}'
+                    WHERE table_name = '{table}' AND column_name = ''
+                    """, (table_description,))
+                else:
+                    # Insert new record
+                    cursor.execute(f"""
+                    INSERT INTO data_dictionary (table_name, column_name, description, updated_at)
+                    VALUES (%s, '', %s, '{now}')
+                    """, (table, table_description))
+            
+            # Update column descriptions if provided
+            if column_descriptions:
+                for col_name, description in column_descriptions.items():
+                    if col_name in df.columns:  # Only add descriptions for columns that exist
+                        # Check if column description exists
+                        cursor.execute(f"SELECT 1 FROM data_dictionary WHERE table_name = '{table}' AND column_name = '{col_name}' LIMIT 1")
+                        exists = bool(cursor.fetchone())
+                        
+                        if exists:
+                            # Update existing record
+                            cursor.execute(f"""
+                            UPDATE data_dictionary 
+                            SET description = %s, updated_at = '{now}'
+                            WHERE table_name = '{table}' AND column_name = '{col_name}'
+                            """, (description,))
+                        else:
+                            # Insert new record
+                            cursor.execute(f"""
+                            INSERT INTO data_dictionary (table_name, column_name, description, updated_at)
+                            VALUES (%s, %s, %s, '{now}')
+                            """, (table, col_name, description))
+            
+            self.connection.commit()
+            cursor.close()
+            
+        except Exception as e:
+            log_debug(f"Error updating data dictionary: {str(e)}")
     
     def _pandas_dtype_to_sql(self, dtype) -> str:
         """Convert pandas dtype to SQL data type."""
@@ -480,6 +755,7 @@ class DorisTools(Toolkit):
         if self._connection is not None:
             self._connection.close()
             self._connection = None
+
             
 if __name__ == "__main__":
     doris = DorisTools(
@@ -494,15 +770,48 @@ if __name__ == "__main__":
     # 创建示例 DataFrame
     df = pd.DataFrame({
         'id': range(1, 101),
-        'name': [f'User {i}' for i in range(1, 101)],
+        'user_name': [f'User {i}' for i in range(1, 101)],
         'age': [20 + i % 50 for i in range(1, 101)],
         'score': [round(50 + i * 0.5, 1) for i in range(1, 101)]
     })
     
-    # 保存到新表，自动创建表
+    # 保存数据并同时更新数据字典
+    print("=== 保存数据并更新数据字典 ===")
     result = doris.save(
         table="users_data", 
-        df=df,
+        df=df, 
         if_exists="replace",
+        create_table_options="ENGINE=OLAP DUPLICATE KEY(`id`) DISTRIBUTED BY HASH(`id`) BUCKETS 5 PROPERTIES('replication_num' = '1')",
+        # 表和字段描述
+        table_description="用户基础信息表 - 存储用户的基本信息和评分数据，用于用户画像分析和推荐系统",
+        column_descriptions={
+            'id': "用户唯一标识符，自增ID",
+            'user_name': "用户名称，系统登录名",
+            'age': "用户年龄，以年为单位",
+            'score': "用户评分，范围0-100，用于评估用户活跃度和价值"
+        }
     )
     print(result)
+    
+    # 使用增强版的 show_tables 方法查看表及其描述
+    print("\n=== 查看表列表（包含表描述） ===")
+    tables = doris.show_tables()
+    print(tables)
+    
+    # 使用增强版的 describe_table 方法查看表字段及其描述
+    print("\n=== 查看表结构（包含字段描述） ===")
+    desc = doris.describe_table("users_data")
+    print(desc)
+    
+    # 分析数据
+    print("\n=== 分析表数据 ===")
+    analysis = doris.analyze_data("SELECT * FROM users_data")
+    print(analysis)
+    
+    # 搜索数据字典
+    print("\n=== 搜索数据字典（关键词：用户） ===")
+    search_result = doris.search_dictionary("用户")
+    print(search_result)
+    
+    # 关闭连接
+    doris.close()

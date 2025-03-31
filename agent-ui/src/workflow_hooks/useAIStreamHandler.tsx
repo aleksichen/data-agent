@@ -17,7 +17,6 @@ import { useQueryState } from 'nuqs'
 const useAIChatStreamHandler = () => {
   const setMessages = usePlaygroundStore((state) => state.setMessages)
   const { addMessage, focusChatInput } = useChatActions()
-  const [agentId] = useQueryState('agent')
   const [sessionId, setSessionId] = useQueryState('session')
   const selectedEndpoint = usePlaygroundStore((state) => state.selectedEndpoint)
   const setStreamingErrorMessage = usePlaygroundStore(
@@ -40,13 +39,8 @@ const useAIChatStreamHandler = () => {
   }, [setMessages])
 
   const handleStreamResponse = useCallback(
-    async (input: string | FormData) => {
+    async (input: string) => {
       setIsStreaming(true)
-
-      const formData = input instanceof FormData ? input : new FormData()
-      if (typeof input === 'string') {
-        formData.append('message', input)
-      }
 
       setMessages((prevMessages) => {
         if (prevMessages.length >= 2) {
@@ -65,7 +59,7 @@ const useAIChatStreamHandler = () => {
 
       addMessage({
         role: 'user',
-        content: formData.get('message') as string,
+        content: input,
         content_type: 'str',
         created_at: Math.floor(Date.now() / 1000)
       })
@@ -83,19 +77,19 @@ const useAIChatStreamHandler = () => {
       let newSessionId = sessionId
       try {
         const endpointUrl = constructEndpointUrl(selectedEndpoint)
-
-        if (!agentId) return
-        const playgroundRunUrl = APIRoutes.AgentRun(endpointUrl).replace(
-          '{agent_id}',
-          agentId
+        const workflow_id = 'bi_workflow'
+        const playgroundRunUrl = APIRoutes.WorkflowRun(endpointUrl).replace(
+          '{workflow_id}',
+          workflow_id
         )
-
-        formData.append('stream', 'true')
-        formData.append('session_id', sessionId ?? '')
 
         await streamResponse({
           apiUrl: playgroundRunUrl,
-          requestBody: formData,
+          requestBody: {
+            input: { message: input },
+            user_id: null,
+            session_id: newSessionId
+          },
           onChunk: (chunk: RunResponse) => {
             if (chunk.event === RunEvent.RunResponse) {
               setMessages((prevMessages) => {
@@ -213,7 +207,7 @@ const useAIChatStreamHandler = () => {
             if (newSessionId && newSessionId !== sessionId && hasStorage) {
               const placeHolderSessionData = {
                 session_id: newSessionId,
-                title: formData.get('message') as string,
+                title: input,
                 created_at: Math.floor(Date.now() / 1000)
               }
               setSessionsData((prevSessionsData) => [
@@ -239,7 +233,6 @@ const useAIChatStreamHandler = () => {
       updateMessagesWithErrorState,
       selectedEndpoint,
       streamResponse,
-      agentId,
       setStreamingErrorMessage,
       setIsStreaming,
       focusChatInput,
