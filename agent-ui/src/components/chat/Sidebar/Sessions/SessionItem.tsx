@@ -1,14 +1,14 @@
 import { useQueryState } from 'nuqs'
 import { SessionEntry } from '@/types/playground'
 import { Button } from '../../../ui/button'
-import useSessionLoader from '@/hooks/useSessionLoader'
+import useSessionLoader from '@/workflow_hooks/useSessionLoader'
 import { deletePlaygroundSessionAPI } from '@/api/playground'
-import { usePlaygroundStore } from '@/store'
+import { usePlaygroundStore } from '@/workflow_store'
 import { toast } from 'sonner'
 import Icon from '@/components/ui/icon'
 import { useState } from 'react'
 import DeleteSessionModal from './DeleteSessionModal'
-import useChatActions from '@/hooks/useChatActions'
+import useChatActions from '@/workflow_hooks/useChatActions'
 import { truncateText, cn } from '@/lib/utils'
 
 type SessionItemProps = SessionEntry & {
@@ -67,7 +67,7 @@ const SessionItem = ({
         className={cn(
           'group flex h-11 w-full cursor-pointer items-center justify-between rounded-lg px-3 py-2 transition-colors duration-200',
           isSelected
-            ? 'cursor-default bg-primary/10'
+            ? 'bg-primary/10 cursor-default'
             : 'bg-background-secondary hover:bg-background-secondary/80'
         )}
         onClick={handleGetSession}

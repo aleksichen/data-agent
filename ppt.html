@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>金融数据分析智能助手</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    <style>
+      :root {
+        --primary-color: #6366f1;
+        --primary-light: #a5b4fc;
+        --secondary-color: #f59e0b;
+        --secondary-light: #fcd34d;
+        --background-color: #f8fafc;
+        --card-color: #ffffff;
+        --text-primary: #111827;
+        --text-secondary: #4b5563;
+        --text-tertiary: #6b7280;
+        --shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
+          0 4px 6px -2px rgba(0, 0, 0, 0.05);
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Noto Sans SC", sans-serif;
+        background-color: #f0f0f0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-height: 100vh;
+        padding: 2rem;
+      }
+
+      .controls {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 1000;
+        display: flex;
+        gap: 10px;
+      }
+
+      .btn {
+        padding: 8px 16px;
+        background-color: var(--primary-color);
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: 500;
+        transition: background-color 0.3s;
+      }
+
+      .btn:hover {
+        background-color: #4f46e5;
+      }
+
+      .slide-container {
+        width: 100%;
+        max-width: 1200px;
+        margin-bottom: 30px;
+      }
+
+      .slide {
+        width: 100%;
+        height: 675px;
+        background-color: var(--background-color);
+        box-shadow: var(--shadow);
+        position: relative;
+        overflow: hidden;
+      }
+
+      .slide-content {
+        width: 100%;
+        height: 100%;
+        padding: 3rem;
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* 标题样式 */
+      .title {
+        font-size: 3.5rem;
+        font-weight: 900;
+        color: var(--text-primary);
+        margin-bottom: 1.5rem;
+        line-height: 1.2;
+      }
+
+      .subtitle {
+        font-size: 1.8rem;
+        font-weight: 500;
+        color: var(--text-secondary);
+        margin-bottom: 2rem;
+      }
+
+      .highlight {
+        color: var(--primary-color);
+        position: relative;
+      }
+
+      .highlight::after {
+        content: "";
+        position: absolute;
+        bottom: 8px;
+        left: 0;
+        width: 100%;
+        height: 8px;
+        background-color: var(--primary-light);
+        z-index: -1;
+        opacity: 0.5;
+      }
+
+      /* 卡片样式 */
+      .card {
+        background-color: var(--card-color);
+        padding: 2rem;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        margin-bottom: 1.5rem;
+      }
+
+      .card-title {
+        font-size: 1.8rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 1rem;
+      }
+
+      .card-content {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      /* 列表样式 */
+      .feature-list {
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      .feature-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 1rem;
+        font-size: 1.2rem;
+        color: var(--text-secondary);
+      }
+
+      .feature-item i {
+        color: var(--primary-color);
+        margin-top: 5px;
+      }
+
+      /* 装饰元素 */
+      .decoration {
+        position: absolute;
+        z-index: 0;
+      }
+
+      .decoration.circle-1 {
+        width: 300px;
+        height: 300px;
+        border-radius: 50%;
+        background: linear-gradient(
+          135deg,
+          var(--primary-light),
+          var(--primary-color)
+        );
+        opacity: 0.1;
+        top: -150px;
+        right: -100px;
+      }
+
+      .decoration.circle-2 {
+        width: 200px;
+        height: 200px;
+        border-radius: 50%;
+        background: linear-gradient(
+          135deg,
+          var(--secondary-light),
+          var(--secondary-color)
+        );
+        opacity: 0.1;
+        bottom: -100px;
+        left: -50px;
+      }
+
+      /* 网格布局 */
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1.5rem;
+        margin-top: 1rem;
+      }
+
+      /* 第一页：大纲 */
+      #slide-1 .title-container {
+        margin-top: 3rem;
+        margin-bottom: 3rem;
+        text-align: center;
+      }
+
+      #slide-1 .subtitle {
+        margin-bottom: 4rem;
+      }
+
+      #slide-1 .outline-list {
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+        margin-left: 2rem;
+      }
+
+      #slide-1 .outline-item {
+        font-size: 1.5rem;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+      }
+
+      #slide-1 .outline-item .number {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        background-color: var(--primary-color);
+        color: white;
+        border-radius: 50%;
+        font-weight: 700;
+      }
+
+      /* 第二页：自我介绍 */
+      #slide-2 .profile-section {
+        display: flex;
+        gap: 3rem;
+        margin-top: 1rem;
+      }
+
+      #slide-2 .profile-image {
+        width: 180px;
+        height: 180px;
+        background-color: #e5e7eb;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #9ca3af;
+        font-size: 2rem;
+      }
+
+      #slide-2 .skill-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.8rem;
+        margin-top: 1.5rem;
+      }
+
+      #slide-2 .skill-tag {
+        background-color: var(--primary-light);
+        color: var(--primary-color);
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-weight: 500;
+        font-size: 0.9rem;
+      }
+
+      /* 第三页：案例演示 */
+      #slide-3 .demo-image {
+        width: 100%;
+        height: 300px;
+        background-color: #e5e7eb;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #9ca3af;
+        font-size: 1.5rem;
+        margin: 1.5rem 0;
+      }
+
+      #slide-3 .feature-highlight {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--primary-color);
+      }
+
+      /* 第四页：方案介绍 */
+      #slide-4 .architecture-image {
+        width: 100%;
+        height: 220px;
+        background-color: #e5e7eb;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #9ca3af;
+        font-size: 1.5rem;
+        margin: 1.5rem 0;
+      }
+
+      /* 第五页：投研数据业务介绍 */
+      #slide-5 .value-card {
+        display: flex;
+        align-items: center;
+        background-color: white;
+        padding: 1.5rem;
+        border-radius: 8px;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+      }
+
+      #slide-5 .value-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 60px;
+        height: 60px;
+        background-color: var(--primary-light);
+        color: var(--primary-color);
+        border-radius: 50%;
+        font-size: 1.5rem;
+        margin-right: 1.5rem;
+      }
+
+      #slide-5 .value-content {
+        flex: 1;
+      }
+
+      #slide-5 .value-title {
+        font-size: 1.4rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 0.5rem;
+      }
+
+      #slide-5 .value-description {
+        font-size: 1.1rem;
+        color: var(--text-secondary);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="controls">
+      <button class="btn" onclick="prevSlide()">上一页</button>
+      <button class="btn" onclick="nextSlide()">下一页</button>
+      <button class="btn" onclick="saveCurrentSlide()">保存当前页</button>
+    </div>
+
+    <!-- 第一页：大纲 -->
+    <div class="slide-container" id="slide-container-1">
+      <div class="slide" id="slide-1">
+        <div class="decoration circle-1"></div>
+        <div class="decoration circle-2"></div>
+        <div class="slide-content">
+          <div class="title-container">
+            <h1 class="title">
+              金融数据分析<span class="highlight">智能助手</span>
+            </h1>
+            <h2 class="subtitle">基于大模型的应用实践</h2>
+          </div>
+
+          <ul class="outline-list">
+            <li class="outline-item">
+              <span class="number">1</span>
+              <span>自我背景与技能介绍</span>
+            </li>
+            <li class="outline-item">
+              <span class="number">2</span>
+              <span>案例演示：金融数据分析智能助手</span>
+            </li>
+            <li class="outline-item">
+              <span class="number">3</span>
+              <span>技术方案与架构解析</span>
+            </li>
+            <li class="outline-item">
+              <span class="number">4</span>
+              <span>投研数据业务场景应用</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- 第二页：自我介绍 -->
+    <div class="slide-container" id="slide-container-2" style="display: none">
+      <div class="slide" id="slide-2">
+        <div class="decoration circle-1"></div>
+        <div class="decoration circle-2"></div>
+        <div class="slide-content">
+          <h1 class="title">自我<span class="highlight">介绍</span></h1>
+
+          <div class="profile-section">
+            <div class="profile-image">
+              <i class="fas fa-user"></i>
+            </div>
+            <div class="profile-info">
+              <h3 class="card-title">个人背景</h3>
+              <p class="feature-item">
+                <i class="fas fa-check-circle"></i>
+                <span>全栈开发工程师，专注投研工程开发</span>
+              </p>
+              <p class="feature-item">
+                <i class="fas fa-check-circle"></i>
+                <span>AI Agent相关产品开发经验</span>
+              </p>
+              <p class="feature-item">
+                <i class="fas fa-check-circle"></i>
+                <span>大模型与金融数据结合的实践探索</span>
+              </p>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3 class="card-title">技术栈</h3>
+            <div class="skill-tags">
+              <span class="skill-tag">React</span>
+              <span class="skill-tag">Vue</span>
+              <span class="skill-tag">Node.js</span>
+              <span class="skill-tag">Python</span>
+              <span class="skill-tag">FastAPI</span>
+              <span class="skill-tag">LangChain</span>
+              <span class="skill-tag">数据可视化</span>
+              <span class="skill-tag">AI应用集成</span>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3 class="card-title">与岗位的契合点</h3>
+            <ul class="feature-list">
+              <li class="feature-item">
+                <i class="fas fa-arrow-right"></i>
+                <span>大数据产品经验 ↔ 腾讯云wedata</span>
+              </li>
+              <li class="feature-item">
+                <i class="fas fa-arrow-right"></i>
+                <span>LLM应用开发 ↔ Agent系统设计</span>
+              </li>
+              <li class="feature-item">
+                <i class="fas fa-arrow-right"></i>
+                <span>多模态交互 ↔ 数据可视化能力</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 第三页：案例演示 -->
+    <div class="slide-container" id="slide-container-3" style="display: none">
+      <div class="slide" id="slide-3">
+        <div class="decoration circle-1"></div>
+        <div class="decoration circle-2"></div>
+        <div class="slide-content">
+          <h1 class="title">案例<span class="highlight">演示</span></h1>
+          <h2 class="subtitle">金融数据分析智能助手</h2>
+
+          <div class="demo-image">
+            <span>产品界面预览 / 实际演示</span>
+          </div>
+
+          <div class="grid">
+            <div class="card">
+              <h3 class="card-title">核心功能</h3>
+              <ul class="feature-list">
+                <li class="feature-item">
+                  <i class="fas fa-robot"></i>
+                  <span>自然语言 → 数据分析转换</span>
+                </li>
+                <li class="feature-item">
+                  <i class="fas fa-comments"></i>
+                  <span>多轮对话式股票/基金分析</span>
+                </li>
+                <li class="feature-item">
+                  <i class="fas fa-chart-line"></i>
+                  <span>智能数据可视化与解读</span>
+                </li>
+              </ul>
+            </div>
+
+            <div class="card">
+              <h3 class="card-title">演示场景</h3>
+              <ul class="feature-list">
+                <li class="feature-item">
+                  <i class="fas fa-play-circle"></i>
+                  <span class="feature-highlight"
+                    >"分析腾讯股票近3个月表现"</span
+                  >
+                </li>
+                <li class="feature-item">
+                  <i class="fas fa-play-circle"></i>
+                  <span class="feature-highlight">"与阿里巴巴进行对比"</span>
+                </li>
+                <li class="feature-item">
+                  <i class="fas fa-play-circle"></i>
+                  <span class="feature-highlight">"生成投资组合分析报告"</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 第四页：方案介绍 -->
+    <div class="slide-container" id="slide-container-4" style="display: none">
+      <div class="slide" id="slide-4">
+        <div class="decoration circle-1"></div>
+        <div class="decoration circle-2"></div>
+        <div class="slide-content">
+          <h1 class="title">技术<span class="highlight">方案</span></h1>
+
+          <div class="architecture-image">
+            <span>系统架构图</span>
+          </div>
+
+          <div class="grid">
+            <div class="card">
+              <h3 class="card-title">技术架构</h3>
+              <ul class="feature-list">
+                <li class="feature-item">
+                  <i class="fas fa-laptop-code"></i>
+                  <span>前端: React + Echarts/Recharts</span>
+                </li>
+                <li class="feature-item">
+                  <i class="fas fa-server"></i>
+                  <span>后端: FastAPI + LangChain/LlamaIndex</span>
+                </li>
+                <li class="feature-item">
+                  <i class="fas fa-database"></i>
+                  <span>存储: 向量数据库 + 关系型数据库</span>
+                </li>
+              </ul>
+            </div>
+
+            <div class="card">
+              <h3 class="card-title">核心模块</h3>
+              <ul class="feature-list">
+                <li class="feature-item">
+                  <i class="fas fa-book"></i>
+                  <span>RAG系统: 金融知识库 + Schema检索</span>
+                </li>
+                <li class="feature-item">
+                  <i class="fas fa-brain"></i>
+                  <span>多轮对话引擎: 混合记忆模型</span>
+                </li>
+                <li class="feature-item">
+                  <i class="fas fa-cogs"></i>
+                  <span>Agent框架: 规划→工具选择→执行</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 第五页：投研数据业务介绍 -->
+    <div class="slide-container" id="slide-container-5" style="display: none">
+      <div class="slide" id="slide-5">
+        <div class="decoration circle-1"></div>
+        <div class="decoration circle-2"></div>
+        <div class="slide-content">
+          <h1 class="title">投研数据<span class="highlight">业务价值</span></h1>
+
+          <div class="value-card">
+            <div class="value-icon">
+              <i class="fas fa-chart-pie"></i>
+            </div>
+            <div class="value-content">
+              <h3 class="value-title">量化分析</h3>
+              <p class="value-description">
+                技术指标计算与趋势识别，支持多维度量化分析
+              </p>
+            </div>
+          </div>
+
+          <div class="value-card">
+            <div class="value-icon">
+              <i class="fas fa-search-dollar"></i>
+            </div>
+            <div class="value-content">
+              <h3 class="value-title">基本面分析</h3>
+              <p class="value-description">
+                财务数据比较与异常检测，深入挖掘投资价值
+              </p>
+            </div>
+          </div>
+
+          <div class="value-card">
+            <div class="value-icon">
+              <i class="fas fa-balance-scale"></i>
+            </div>
+            <div class="value-content">
+              <h3 class="value-title">投资组合构建</h3>
+              <p class="value-description">
+                风险收益特性分析，智能资产配置建议
+              </p>
+            </div>
+          </div>
+
+          <div class="value-card">
+            <div class="value-icon">
+              <i class="fas fa-rocket"></i>
+            </div>
+            <div class="value-content">
+              <h3 class="value-title">与腾讯云wedata结合</h3>
+              <p class="value-description">
+                数据治理集成，大规模数据处理，低代码分析体验
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let currentSlide = 1;
+      const totalSlides = 5;
+
+      function showSlide(slideNumber) {
+        for (let i = 1; i <= totalSlides; i++) {
+          const slideContainer = document.getElementById(
+            `slide-container-${i}`
+          );
+          if (i === slideNumber) {
+            slideContainer.style.display = "block";
+          } else {
+            slideContainer.style.display = "none";
+          }
+        }
+        currentSlide = slideNumber;
+      }
+
+      function nextSlide() {
+        if (currentSlide < totalSlides) {
+          showSlide(currentSlide + 1);
+        }
+      }
+
+      function prevSlide() {
+        if (currentSlide > 1) {
+          showSlide(currentSlide - 1);
+        }
+      }
+
+      async function saveCurrentSlide() {
+        const slideElement = document.getElementById(`slide-${currentSlide}`);
+
+        // 临时隐藏控制按钮
+        const controls = document.querySelector(".controls");
+        const controlsDisplay = controls.style.display;
+        controls.style.display = "none";
+
+        try {
+          const canvas = await html2canvas(slideElement, {
+            scale: 2,
+            logging: false,
+            backgroundColor: null,
+          });
+
+          const dataUrl = canvas.toDataURL("image/png");
+          const link = document.createElement("a");
+          link.download = `slide-${currentSlide}.png`;
+          link.href = dataUrl;
+          link.click();
+        } catch (error) {
+          console.error("Error saving slide:", error);
+        } finally {
+          // 恢复控制按钮
+          controls.style.display = controlsDisplay;
+        }
+      }
+
+      // 键盘导航
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "ArrowRight") {
+          nextSlide();
+        } else if (e.key === "ArrowLeft") {
+          prevSlide();
+        }
+      });
+    </script>
+  </body>
+</html>

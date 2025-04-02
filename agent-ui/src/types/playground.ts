@@ -153,6 +153,7 @@ export interface PlaygroundChatMessage {
   images?: ImageData[]
   videos?: VideoData[]
   audio?: AudioData[]
+  chart?: ChartData
   response_audio?: ResponseAudio
 }
 
@@ -183,6 +184,10 @@ export interface AudioData {
   content?: string
   channels?: number
   sample_rate?: number
+}
+
+export interface ChartData {
+  type: string
 }
 
 export interface ReferenceData {
@@ -226,6 +231,7 @@ export interface ChatEntry {
     response_audio?: {
       transcript?: string
     }
+    chart?: ChartData
     created_at: number
   }
 }

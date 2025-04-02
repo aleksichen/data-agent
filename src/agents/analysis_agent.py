@@ -1,17 +1,45 @@
 from agno.agent import Agent
 from agno.models.deepseek import DeepSeek
+from agno.tools.thinking import ThinkingTools
+from agno.tools.python import PythonTools
+from agno.storage.agent.postgres import PostgresAgentStorage
+
+from src.tools.doris import DorisTools
+from src.tools.charts import ChartTools
+
+doris_tool = DorisTools(
+    host="192.168.50.97",
+    port=30930,
+    user="root",
+    password="",
+    database="wedata",
+    read_only=False,  # 设置为 True 禁用数据修改功能
+)
+
+db_url = "postgresql+psycopg://wedata:wedata@192.168.50.97:30036/wedata"
+
+agent_storage = PostgresAgentStorage(
+    table_name="personalized_agent_sessions", db_url=db_url, auto_upgrade_schema=True
+)
 
 data_analysis_agent = Agent(
-  name="数据分析Agent",
-  model=DeepSeek(),
-  tools=[
-    DorisTools()
-    data_query,
-    data_process,
-    write,
-  ],
-  instructions=[
-    """
+    name="数据分析Agent",
+    model=DeepSeek(),
+    tools=[
+        # ThinkingTools(think=True),
+        ChartTools(),
+        DorisTools(
+            host="192.168.50.97",
+            port=30930,
+            user="root",
+            password="",
+            database="wedata",
+            read_only=False,  # 设置为 True 禁用数据修改功能
+        ),
+        PythonTools(),
+    ],
+    instructions=[
+        """
     # 数据分析Agent指令
     
     你是一个专业的数据分析助手。你的主要任务是分析用户数据，从中提取见解，将数据保存到数据仓库，并以特定格式提供结果，以便图表渲染Agent可以生成合适的可视化。
@@ -93,6 +121,7 @@ data_analysis_agent = Agent(
     
     记住：你的输出将直接传递给图表渲染Agent，所以格式和内容必须准确无误，特别是表名、字段名和数据样例。
     """
-  ],
-  markdown=True
+    ],
+    markdown=True,
+    storage=agent_storage,
 )

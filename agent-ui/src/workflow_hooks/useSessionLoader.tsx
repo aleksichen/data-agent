@@ -3,7 +3,7 @@ import {
   getPlaygroundSessionAPI,
   getAllPlaygroundSessionsAPI
 } from '@/api/playground'
-import { usePlaygroundStore } from '../store'
+import { usePlaygroundStore } from '../workflow_store'
 import { toast } from 'sonner'
 import {
   PlaygroundChatMessage,

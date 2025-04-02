@@ -2,8 +2,8 @@ import { useCallback } from 'react'
 
 import { APIRoutes } from '@/api/routes'
 
-import useChatActions from '@/hooks/useChatActions'
-import { usePlaygroundStore } from '../store'
+import useChatActions from '@/workflow_hooks/useChatActions'
+import { usePlaygroundStore } from '../workflow_store'
 import { RunEvent, type RunResponse } from '@/types/playground'
 import { constructEndpointUrl } from '@/lib/constructEndpointUrl'
 import useAIResponseStream from './useAIResponseStream'
@@ -92,6 +92,7 @@ const useAIChatStreamHandler = () => {
           },
           onChunk: (chunk: RunResponse) => {
             if (chunk.event === RunEvent.RunResponse) {
+              console.log(chunk)
               setMessages((prevMessages) => {
                 const newMessages = [...prevMessages]
                 const lastMessage = newMessages[newMessages.length - 1]
@@ -104,10 +105,13 @@ const useAIChatStreamHandler = () => {
                   lastMessage.content += uniqueContent
                   lastContent = chunk.content
 
+                  lastMessage.content_type = chunk.content_type || 'str'
+
                   const toolCalls: ToolCall[] = [...(chunk.tools ?? [])]
                   if (toolCalls.length > 0) {
                     lastMessage.tool_calls = toolCalls
                   }
+
                   if (chunk.extra_data?.reasoning_steps) {
                     lastMessage.extra_data = {
                       ...lastMessage.extra_data,
@@ -132,6 +136,10 @@ const useAIChatStreamHandler = () => {
                   }
                   if (chunk.audio) {
                     lastMessage.audio = chunk.audio
+                  }
+
+                  if (chunk.content_type === 'chart') {
+                    lastMessage.chart = chunk
                   }
                 } else if (
                   chunk.response_audio?.transcript &&
